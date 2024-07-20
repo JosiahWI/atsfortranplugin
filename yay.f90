@@ -7,7 +7,7 @@ module yay
   private
   public :: init
 
-  type, bind(c) :: reg_info_type
+  type, bind(C) :: reg_info_type
     character(kind = c_char) :: plugin_name
     character(kind = c_char) :: vendor
     character(kind = c_char) :: support_email
@@ -15,17 +15,17 @@ module yay
 
   interface
 
-    function ts_plugin_register() bind(C, name='_Z16TSPluginRegisterPK24TSPluginRegistrationInfo')
+    integer(kind = c_int) function ts_plugin_register(info) bind(C, name='_Z16TSPluginRegisterPK24TSPluginRegistrationInfo')
       use, intrinsic :: iso_c_binding
 
-      integer(kind = c_int) :: ts_plugin_register
+      type(c_ptr), intent(in) :: info
     end function ts_plugin_register
 
   end interface
 
-  character(len = 15) :: plugin_name = 'Fortran Plugin' // c_null_char
-  character(len = 27) :: vendor = 'Apache Software Foundation' // c_null_char
-  character(len = 29) :: support_email = 'dev@trafficserver.apache.org' // c_null_char
+  character(len = 15), target :: plugin_name   = 'Fortran Plugin' // achar(0)
+  character(len = 27), target :: vendor        = 'Apache Software Foundation' // achar(0)
+  character(len = 29), target :: support_email = 'dev@trafficserver.apache.org' // achar(0)
 
 contains
 
@@ -34,27 +34,29 @@ contains
   function init() result(success) bind(C, name='TSPluginInit')
     integer(kind = c_int) :: success
    
-    call register()
-    success = 1
+    success = register()
   end function init
 
-  subroutine register()
-    integer(kind = c_int) :: success
-    type(reg_info_type) :: reginfo
+  function register() result(success)
+    integer(kind = c_int)                    :: success
+    type(reg_info_type), allocatable, target :: info
+    type(reg_info_type), pointer             :: info_ptr
+    character(len = :), pointer              :: plugin_name_ptr
+    character(len = :), pointer              :: vendor_ptr
+    character(len = :), pointer              :: support_email_ptr
 
-    character(len = :), pointer :: plugin_name_ptr
-    character(len = :), pointer :: vendor_ptr
-    character(len = :), pointer :: support_email_ptr
+    plugin_name_ptr   => plugin_name
+    vendor_ptr        => vendor
+    support_email_ptr => support_email
 
-    plugin_name_ptr = plugin_name
-    vendor_ptr = vendor
-    support_email_ptr = support_email
+    allocate(info);
+    info%plugin_name   = plugin_name_ptr
+    info%vendor        = vendor_ptr
+    info%support_email = support_email_ptr
 
-    reginfo%plugin_name = plugin_name_ptr
-    reginfo%vendor = vendor_ptr
-    reginfo%support_email = support_email_ptr
+    info_ptr => info
 
-    success = ts_plugin_register()
-  end subroutine register
+    success = ts_plugin_register(c_loc(info_ptr))
+  end function register
 
 end module yay
